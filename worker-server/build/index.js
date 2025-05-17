@@ -13,27 +13,32 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 // worker-server.ts
-const nats_1 = require("nats");
+const redis_1 = require("redis");
 const node_cron_1 = __importDefault(require("node-cron"));
+const config_1 = require("./config/config");
 class WorkerServer {
     constructor() {
-        this.natsConnection = null;
-        // Use the NATS URL from config or default to localhost
-        this.natsUrl = process.env.NATS_URL || 'nats://localhost:4222';
-        this.eventSubject = 'crypto.trigger.update';
+        this.redisClient = null;
+        this.redisUrl = config_1.config.redis.url;
+        this.eventChannel = 'crypto.update';
     }
     /**
-     * Connect to the NATS server
+     * Connect to the Redis server
      */
-    connectToNats() {
+    connectToRedis() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                console.log(`Connecting to NATS server at ${this.natsUrl}...`);
-                this.natsConnection = yield (0, nats_1.connect)({ servers: this.natsUrl });
-                console.log(`Connected to NATS server at ${this.natsConnection.getServer()}`);
+                console.log(`Connecting to Redis server...`);
+                this.redisClient = (0, redis_1.createClient)({
+                    url: this.redisUrl
+                });
+                this.redisClient.on('error', (err) => console.error('Redis Client Error:', err));
+                this.redisClient.on('connect', () => console.log('Connected to Redis'));
+                yield this.redisClient.connect();
+                console.log('Connected to Redis server');
             }
             catch (error) {
-                console.error('Failed to connect to NATS server:', error);
+                console.error('Failed to connect to Redis server:', error);
                 throw error;
             }
         });
@@ -43,16 +48,16 @@ class WorkerServer {
      */
     publishUpdateTrigger() {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!this.natsConnection) {
-                throw new Error('Not connected to NATS server');
+            if (!this.redisClient) {
+                throw new Error('Not connected to Redis server');
             }
             const message = {
                 trigger: 'update',
                 timestamp: new Date().toISOString()
             };
             try {
-                console.log(`Publishing update trigger to ${this.eventSubject}: ${JSON.stringify(message)}`);
-                this.natsConnection.publish(this.eventSubject, JSON.stringify(message));
+                console.log(`Publishing update trigger to ${this.eventChannel}: ${JSON.stringify(message)}`);
+                yield this.redisClient.publish(this.eventChannel, JSON.stringify(message));
                 console.log('Message published successfully');
             }
             catch (error) {
@@ -83,10 +88,10 @@ class WorkerServer {
     setupShutdownHandlers() {
         const shutdown = (signal) => __awaiter(this, void 0, void 0, function* () {
             console.log(`${signal} received. Starting graceful shutdown...`);
-            if (this.natsConnection) {
-                console.log('Closing NATS connection...');
-                yield this.natsConnection.close();
-                console.log('NATS connection closed');
+            if (this.redisClient) {
+                console.log('Closing Redis connection...');
+                yield this.redisClient.quit();
+                console.log('Redis connection closed');
             }
             process.exit(0);
         });
@@ -100,8 +105,8 @@ class WorkerServer {
     start() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                // Connect to NATS
-                yield this.connectToNats();
+                // Connect to Redis
+                yield this.connectToRedis();
                 // Setup shutdown handlers
                 this.setupShutdownHandlers();
                 // Send initial update trigger

@@ -9,7 +9,7 @@ const path_1 = __importDefault(require("path"));
 // Load environment variables from .env file
 dotenv_1.default.config({ path: path_1.default.join(__dirname, "../../.env") });
 exports.config = {
-    nats: {
-        uri: process.env.NATS_URI || "nats://localhost:4222",
+    redis: {
+        url: process.env.REDIS_URL || ""
     },
 };

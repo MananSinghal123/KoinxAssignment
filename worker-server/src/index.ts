@@ -1,29 +1,34 @@
 // worker-server.ts
-import { connect, NatsConnection } from 'nats';
+import { createClient } from 'redis';
 import cron from 'node-cron';
 import { config } from './config/config';
 
 class WorkerServer {
-  private natsConnection: NatsConnection | null = null;
-  private readonly natsUrl: string;
-  private readonly eventSubject: string;
+  private redisClient: ReturnType<typeof createClient> | null = null;
+  private readonly redisUrl: string;
+  private readonly eventChannel: string;
 
   constructor() {
-    // Use the NATS URL from config or default to localhost
-    this.natsUrl = process.env.NATS_URL || 'nats://localhost:4222';
-    this.eventSubject = 'crypto.trigger.update';
+    this.redisUrl = config.redis.url;
+    this.eventChannel = 'crypto.update';
   }
 
   /**
-   * Connect to the NATS server
+   * Connect to the Redis server
    */
-  private async connectToNats(): Promise<void> {
+  private async connectToRedis(): Promise<void> {
     try {
-      console.log(`Connecting to NATS server at ${this.natsUrl}...`);
-      this.natsConnection = await connect({ servers: this.natsUrl });
-      console.log(`Connected to NATS server at ${this.natsConnection.getServer()}`);
+      console.log(`Connecting to Redis server...`);
+      this.redisClient = createClient({
+        url: this.redisUrl
+      });
+
+      this.redisClient.on('error', (err: any) => console.error('Redis Client Error:', err));
+      this.redisClient.on('connect', () => console.log('Connected to Redis'));
+      await this.redisClient.connect();
+      console.log('Connected to Redis server');
     } catch (error) {
-      console.error('Failed to connect to NATS server:', error);
+      console.error('Failed to connect to Redis server:', error);
       throw error;
     }
   }
@@ -32,18 +37,16 @@ class WorkerServer {
    * Publish an update trigger event
    */
   private async publishUpdateTrigger(): Promise<void> {
-    if (!this.natsConnection) {
-      throw new Error('Not connected to NATS server');
+    if (!this.redisClient) {
+      throw new Error('Not connected to Redis server');
     }
-
     const message = {
       trigger: 'update',
       timestamp: new Date().toISOString()
     };
-
     try {
-      console.log(`Publishing update trigger to ${this.eventSubject}: ${JSON.stringify(message)}`);
-      this.natsConnection.publish(this.eventSubject, JSON.stringify(message));
+      console.log(`Publishing update trigger to ${this.eventChannel}: ${JSON.stringify(message)}`);
+      await this.redisClient.publish(this.eventChannel, JSON.stringify(message));
       console.log('Message published successfully');
     } catch (error) {
       console.error('Error publishing message:', error);
@@ -73,13 +76,11 @@ class WorkerServer {
   private setupShutdownHandlers(): void {
     const shutdown = async (signal: string): Promise<void> => {
       console.log(`${signal} received. Starting graceful shutdown...`);
-      
-      if (this.natsConnection) {
-        console.log('Closing NATS connection...');
-        await this.natsConnection.close();
-        console.log('NATS connection closed');
+      if (this.redisClient) {
+        console.log('Closing Redis connection...');
+        await this.redisClient.quit();
+        console.log('Redis connection closed');
       }
-      
       process.exit(0);
     };
 
@@ -93,8 +94,8 @@ class WorkerServer {
    */
   public async start(): Promise<void> {
     try {
-      // Connect to NATS
-      await this.connectToNats();
+      // Connect to Redis
+      await this.connectToRedis();
       
       // Setup shutdown handlers
       this.setupShutdownHandlers();

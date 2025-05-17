@@ -13,13 +13,14 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "nats": "^2.16.0",
+    "dotenv": "^16.4.5",
     "node-cron": "^3.0.3",
-    "dotenv": "^16.4.5"
+    "redis": "^4.7.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
     "@types/node-cron": "^3.0.11",
+    "@types/redis": "^4.0.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }

@@ -5,13 +5,13 @@ import path from "path";
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
 interface Config {
-  nats: {
-    uri: string;
+  redis: {
+    url: string;
   };
 }
 
 export const config: Config = {
-  nats: {
-    uri: process.env.NATS_URI || "nats://localhost:4222",
+  redis: {
+    url: process.env.REDIS_URL ||""
   },
-}; 
+};
