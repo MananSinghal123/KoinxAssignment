@@ -1,5 +1,0 @@
-{
-  "dependencies": {
-    "redis-server": "^1.2.2"
-  }
-}
